@@ -1,8 +1,9 @@
 import cv2
 import numpy as np
-from matplotlib import pyplot as plt
 from scipy.ndimage import label
-camera = cv2.VideoCapture(0)
+camera = cv2.VideoCapture(0) #Insert the camera number here
+ret = camera.set(3,1920)
+ret = camera.set(4,1080)
 
 
 def main():
@@ -40,18 +41,30 @@ def MainMenu():
 	while(1):
 
 		Grayscale()
+		#threshold_value=BlackWhite()
 
 
 
 def Grayscale():
 	while(1):
-		im = camera.read()[1] # read from webcam
-		im_gray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY) #convert to BW
+		#change to change image size
+		SW = 300 #starting width
+		EW = 1200#ending width
+		SH = 100#starting hight
+		EH = 800#ending hight
+		im_uncropped = camera.read()[1] # read from webcam
+		
+		cv2.rectangle(im_uncropped, (SW,SH), (EW,EH), (255,255,255))
+		im_gray = cv2.cvtColor(im_uncropped,cv2.COLOR_BGR2GRAY) #convert to BW
+		#im_gray = im_uncropped [50:700,50:400]
 		cv2.putText(im_gray, "main menu", (0,30), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0,10,0))
 		cv2.putText(im_gray, "Press \"Space\" to take picture", (0,60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,10,0))
 		cv2.putText(im_gray, "Press \"1\" perform Watershed on last picture", (0,90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,10,0))
 		cv2.putText(im_gray, "Press \"2\" perform inverse_Watershed on last picture", (0,110), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,10,0))
-		cv2.putText(im_gray, "Press \"3\" perform skeletonise last picture", (0,130), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,10,0))
+		cv2.putText(im_gray, "Press \"3\" perform skeletonise on last picture", (0,130), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,10,0))
+		cv2.putText(im_gray, "Press \"4\" perform manual threshold watershed on last picture", (0,150), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,10,0))
+		cv2.putText(im_gray, "Press \"5\" to change manual settings ", (0,170), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,10,0))
+		cv2.putText(im_gray, "Press ESC to exit", (0,190), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,10,0))
 
 		cv2.imshow('BW image2',im_gray) # Display to window
 		key=cv2.waitKey(5)
@@ -60,7 +73,8 @@ def Grayscale():
 			exit()
 		if key==32:
 			cv2.destroyAllWindows()
-			im = camera.read()[1]
+			im_uncropped = camera.read()[1]
+			im = im_uncropped [SH:EH,SW:EW]
 			cv2.imwrite("temp.jpg",im)
 			#return
 		if key==49:
@@ -73,6 +87,9 @@ def Grayscale():
 			skeletonise()
 			return
 		if key==52:
+			BlackWhite()
+			return
+		if key==53:
 			return
 
 
@@ -91,7 +108,7 @@ def GrabImage():
 		cv2.waitKey(1)
 	return (im)
 
-def BlackWhite(threshold_value):
+def BlackWhite(threshold_value=100):
 	while(1):
 		im_live = camera.read()[1] # read from webcam
 		#im_live = cv2.medianBlur(im_live,5)
@@ -102,8 +119,8 @@ def BlackWhite(threshold_value):
 		key=cv2.waitKey(5)
 		if key==32:
 			cv2.destroyAllWindows()
-			im = camera.read()[1]
-			cv2.imwrite("temp.jpg",im)
+			#im = camera.read()[1]
+			cv2.imwrite("temp_edited.jpg",im_BW_live)
 			return
 		if key==65364:
 			threshold_value=threshold_value+5
@@ -171,7 +188,59 @@ def Watershed_inverse():
 
 def Watershed():
 		# Read image
-	img = cv2.imread('temp.jpg')
+	thresh = cv2.imread('temp.jpg')
+	# Convert to grayscale image
+	display('gray', gray)
+	# Convert to binary image
+
+
+	# noise removal
+	# to remove any small white noises use morphological opening
+	kernel = np.ones((3,3),np.uint8)
+	opening = cv2.morphologyEx(thresh,cv2.MORPH_OPEN,kernel, iterations = 2)
+	sure_bg = cv2.dilate(opening,kernel,iterations=3)
+	display('Sure Background', sure_bg)
+
+	dist_transform = cv2.distanceTransform(opening,cv2.cv.CV_DIST_L2,5)
+	ret, sure_fg = cv2.threshold(dist_transform,0.5*dist_transform.max(),255,0)
+	display('Sure Foreground', sure_fg)
+
+	# Finding unknown region
+	sure_fg = np.uint8(sure_fg)
+	unknown = cv2.subtract(sure_bg,sure_fg)
+	display('unknown area', unknown)
+
+
+	contours, hierarchy = cv2.findContours (sure_fg,cv2.cv.CV_RETR_EXTERNAL,cv2.cv.CV_CHAIN_APPROX_SIMPLE)
+
+	ret,sure_bg = cv2.threshold(sure_bg,0,255,cv2.THRESH_BINARY_INV)
+	lbl, ncc = label(sure_fg)
+	lbl = lbl * (255/ncc)
+	lbl[sure_bg == 255] = 255
+	lbl = lbl.astype(np.int32)
+	cv2.watershed(img, lbl)
+
+	lbl[lbl == -1] = 0
+	lbl = lbl.astype(np.uint8)
+	result = 255 - lbl
+	#display("Final image", result )
+
+	result[result != 255] = 0
+	result = cv2.dilate(result, None)
+	img[result == 255] = (0, 0, 255)
+	seed_number = len(contours)
+	print ("number of seeds= ",seed_number)
+
+
+	cv2.putText(img, "number of seeds= " + str(seed_number), (50,50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0))
+	#cv2.drawContours(img, contours, -1, (0,255,255), 3)
+
+	display("Final image", img )
+	return
+
+def Watershed_manual():
+		# Read image
+	img = cv2.imread('temp_edited.jpg')
 	# Convert to grayscale image
 	gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
 	display('gray', gray)
