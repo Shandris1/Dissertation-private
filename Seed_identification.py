@@ -188,9 +188,11 @@ def Watershed_inverse():
 
 def Watershed():
 		# Read image
-	thresh = cv2.imread('temp.jpg')
+	img = cv2.imread('temp.jpg')
 	# Convert to grayscale image
+	gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
 	display('gray', gray)
+	ret,thresh = cv2.threshold(gray,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
 	# Convert to binary image
 
 
@@ -240,12 +242,9 @@ def Watershed():
 
 def Watershed_manual():
 		# Read image
-	img = cv2.imread('temp_edited.jpg')
+	thresh = cv2.imread('temp_edited.jpg')
 	# Convert to grayscale image
-	gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-	display('gray', gray)
-	# Convert to binary image
-	ret,thresh = cv2.threshold(gray,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+	
 
 
 	# noise removal
